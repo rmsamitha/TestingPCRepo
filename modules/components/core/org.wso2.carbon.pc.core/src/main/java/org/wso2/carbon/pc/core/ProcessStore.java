@@ -27,6 +27,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.jaggeryjs.hostobjects.stream.StreamHostObject;
 import org.json.JSONArray;
+import org.json.JSONException;
 import org.json.JSONObject;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -408,6 +409,7 @@ public class ProcessStore {
     }
 
     public String removeBPMNDiagram(String processName, String processVersion) throws ProcessCenterException {
+
         String processId = "";
         try {
             RegistryService registryService = ProcessCenterServerHolder.getInstance().getRegistryService();
@@ -1210,8 +1212,23 @@ public class ProcessStore {
      * @return process id
      */
     public String uploadDocument(String processName, String processVersion, String docName, String docSummary,
-            String docUrl, Object docObject, String docExtension) throws ProcessCenterException {
+                                 String docUrl, Object docObject, String docExtension) throws ProcessCenterException,
+            JSONException {
+
         String processId = "FAILED TO UPLOAD DOCUMENT";
+        //Getting associated document list of the process and creating json format of it
+        String processDocList = this.getUploadedDocumentDetails(ProcessCenterConstants.GREG_PATH_PROCESS + processName
+                + "/" + processVersion);
+        JSONArray processDocs = new JSONArray(processDocList);
+
+        //checking for a uploaded document with same name in the list, in positive case throws an error and exit
+        for (int iteratorValue = 0; iteratorValue < processDocs.length(); iteratorValue++) {
+            String path = ((JSONObject) processDocs.get(iteratorValue)).get("path").toString();
+            if ((getAssociatedDocFileName(path).equals(docName + "." + docExtension))) {
+                throw new ProcessCenterException("Associated document " + getAssociatedDocFileName(path) + " exits in "
+                        + processName +" version" + processVersion);
+            }
+        }
         try {
             StreamHostObject s = (StreamHostObject) docObject;
             InputStream docStream = s.getStream();
@@ -1235,7 +1252,9 @@ public class ProcessStore {
                     docContentPath = "doccontent/" + processName + "/" + processVersion + "/" + docName +
                             "." + docExtension;
                     reg.put(docContentPath, docContentResource);
-                    reg.addAssociation(docContentPath, processAssetPath, ProcessCenterConstants.ASSOCIATION_TYPE);
+
+                    reg.addAssociation(docContentPath, processAssetPath,
+                            ProcessCenterConstants.ASSOCIATION_TYPE);
                 }
 
                 Resource resource = reg.get(processAssetPath);
@@ -1739,6 +1758,13 @@ public class ProcessStore {
                     "Error in deleting process associations of the process " + processName + "-" + processVersion;
             throw new ProcessCenterException(errMsg, e);
         }
+    }
+
+    /*
+    Utility method for extracting file name from the registry path
+     */
+    private static String getAssociatedDocFileName(String filepath) {
+        return filepath.substring(filepath.lastIndexOf("/") + 1);
     }
     //    public static void main(String[] args) {
     //        String path = "/home/chathura/temp/t5/TestProcess1.bpmn";
